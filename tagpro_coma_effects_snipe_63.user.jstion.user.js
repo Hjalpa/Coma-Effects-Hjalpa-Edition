@@ -1,20 +1,17 @@
 // ==UserScript==
-// @name            TagPro Coma Effects - Hjalpa Edition
-// @version         0.5
+// @name            TagPro Coma Effects Snipe 63
+// @version         0.63
 // @description     Particles can be fun https://www.reddit.com/r/TagPro/comments/mtu50m/does_anyone_know_a_script_to_get_trails_like_this/
-// @match           https://tagpro.koalabeast.com/profile/*
-// @match           https://tagpro.koalabeast.com/game
-// @match           https://tagpro.koalabeast.com/game?*
-// @match           https://*.parretlabs.xyz/flagtag/
-// @match			https://*.koalabeast.com/game*
+// @include         https://tagpro*.koalabeast.com/profile/*
+// @include         https://tagpro*.koalabeast.com/game
+// @include         https://tagpro*.koalabeast.com/game?*
 // @require         https://greasyfork.org/scripts/371240/code/TagPro%20Userscript%20Library.js
 // @grant           GM_setValue
 // @grant           GM_getValue
 // @grant           GM_xmlhttpRequest
 // @connect         koalabeast.com
-// @author          Comakip, Hjalpa
+// @author          Comakip, Hjalpa, ArryKane
 // ==/UserScript==
-
 
 /* globals tagpro, PIXI, jQuery, $, tinycolor, tpul */
 
@@ -26,34 +23,39 @@ const settings = tpul.settings.addSettings({
     tooltipText: 'Configure Coma Effects settings',
     fields: {
         trails: {
-            label: 'Speedy trails', 
-            type: 'checkbox', 
-            default: true 
+            label: 'Speedy trails',
+            type: 'checkbox',
+            default: true
         },
         kiss: {
-            label: 'Kiss with love!', 
-            type: 'checkbox', 
-            default: true 
+            label: 'Kiss with love!',
+            type: 'checkbox',
+            default: true
         },
         balloon: {
-            label: 'Pop like a balloon (kinda)', 
-            type: 'checkbox', 
-            default: true 
+            label: 'Pop like a balloon (kinda)',
+            type: 'checkbox',
+            default: true
         },
         capConfetti: {
-            label: 'Cap Confetti', 
-            type: 'checkbox', 
+            label: 'Cap Confetti',
+            type: 'checkbox',
             default: true
         },
         agressiveRb: {
-            label: 'More aggresive RB defusal', 
-            type: 'checkbox', 
-            default: true 
-        }, 
+            label: 'More aggressive RB defusal',
+            type: 'checkbox',
+            default: true
+        },
         grabAnimation:  {
-            label: 'Animate grabbing a flag or pup', 
-            type: 'checkbox', 
-            default: true 
+            label: 'Animate grabbing a flag or pup',
+            type: 'checkbox',
+            default: false
+        },
+        snipe:  {
+            label: 'Snipe Detection',
+            type: 'checkbox',
+            default: true
         }
     }
 })
@@ -63,6 +65,8 @@ if (!(window.location.href.includes('/profile/'))) {
     settings.button.classList.add("hide")
 }
 
+// Store player emitters
+let playerEmitters = {};
 
 // Trail colors, change to match texture pack.
 const trailColors = {
@@ -73,7 +77,7 @@ const trailColors = {
     },
     // blue
     2: {
-        "start": "#3bc9ee",
+        "start": "3bc9ee",
         "end": "#003785"
     }
 }
@@ -131,7 +135,7 @@ const initTrails = () => {
     tagpro.renderer.createPlayerEmitter = function (player) {
         if (tagpro.renderer.options.disableParticles) return
         player.sprites.emitter =
-            new PIXI.particles.Emitter(
+           tagpro.renderer.makeParticleEmitter(
                 tagpro.renderer.layers.midground,
                 [tagpro.renderer.particleTexture],
                 { ...tagpro.particleDefinitions['trail'], color: trailColors[player.team] }
@@ -139,6 +143,9 @@ const initTrails = () => {
         player.sprites.emitter.keep = true
         tagpro.renderer.emitters.push(player.sprites.emitter)
         player.sprites.emitter.emit = false
+
+        // Store the emitter reference
+        playerEmitters[player.id] = player.sprites.emitter;
     };
 
     // Change trails emitter color when swapping teams.
@@ -219,39 +226,37 @@ const initKiss = () => {
 
     // Create kiss with hearts flying around.
 
-    //  var kissez = ['kiss1', 'kiss2', 'kiss3','kiss4','kiss5','kiss6','kiss7','kiss8']
-    //  var randomkissez = kissez[Math.floor(Math.random() * kissez.length)];
-    //  var kissaudio = new Audio(randomkissez); // urls
+const kissez = ['kiss1', 'kiss2', 'kiss3', 'kiss4', 'kiss5', 'kiss6', 'kiss7', 'kiss8'];
+const kissaudio = {};
 
+// Initialize kiss sounds
+kissez.forEach(kiss => {
+  kissaudio[kiss] = new Audio(`https://raw.githubusercontent.com/hjalpa/sounds/main/${kiss}.mp3`);
+  kissaudio.volume = 0.5;
+});
 
- //   var kissez = ['kiss1', 'kiss2', 'kiss3','kiss4','kiss5','kiss6','kiss7','kiss8'];
- //   var kisssound ={};
+tagpro.renderer.createKiss = function(x, y) {
+  if (tagpro.renderer.options.disableParticles) return;
+  const kissEmitter = tagpro.renderer.makeParticleEmitter(
+    tagpro.renderer.layers.foreground,
+    [tagpro.renderer.particleHeartTexture],
+    tagpro.particleDefinitions.kiss
+  );
+  kissEmitter.updateSpawnPos(x, y);
+  tagpro.renderer.emitters.push(kissEmitter);
 
- //   switch (sound) {
- //       case 'kisssound':
- //           for (var i=0; i<kissez.length; i++) {
- //   kissaudio[kissez[i]] = new Audio({
- //       urls: ['https://raw.githubusercontent.com/hjalpa/sounds/main/' + kissez[i] + '.mp3'],
- //   })
-    var kissaudio = new Audio("https://raw.githubusercontent.com/hjalpa/sounds/main/kiss5.mp3");
+  // Pause and reset other relevant sounds
+  document.getElementById("pop").pause();
+  document.getElementById("pop").currentTime = 0;
+  document.getElementById("friendlydrop").pause();
+  document.getElementById("friendlydrop").currentTime = 0;
+  document.getElementById("drop").pause();
+  document.getElementById("drop").currentTime = 0;
 
-    tagpro.renderer.createKiss = function(x,y) {
-        if (tagpro.renderer.options.disableParticles) return
-        const kissEmitter = new PIXI.particles.Emitter(
-            tagpro.renderer.layers.foreground,
-            [tagpro.renderer.particleHeartTexture],
-            tagpro.particleDefinitions.kiss
-        )
-        kissEmitter.updateSpawnPos(x,y)
-        tagpro.renderer.emitters.push(kissEmitter)
-        document.getElementById("pop").pause();
-        document.getElementById("pop").currentTime = 0;
-        document.getElementById("friendlydrop").pause();
-        document.getElementById("friendlydrop").currentTime = 0;
-        document.getElementById("drop").pause();
-        document.getElementById("drop").currentTime = 0;
-        kissaudio.play();
-    }
+  // Play a random kiss sound
+  const randomKiss = kissez[Math.floor(Math.random() * kissez.length)];
+  kissaudio[randomKiss].play();
+}
 
     // Keep track of flag carriers of last frame
     // TODO: support multiple flags
@@ -296,6 +301,128 @@ const initKiss = () => {
     tagpro.socket.on('p', function(player) {
         if (player.id == lastRedFlagCarrier.id) lastRedFlagCarrier = player
         if (player.id == lastBlueFlagCarrier.id) lastBlueFlagCarrier = player
+    })
+}
+
+// Snipe Logic
+const initSnipe = () => {
+
+    // Particledefinition
+    tagpro.particleDefinitions['snipe'] = {
+        "alpha": {
+            "start": 0.6,
+            "end": 0.2
+        },
+        "scale": {
+            "start": 0.4,
+            "end": 0.01,
+            "minimumScaleMultiplier": 1
+        },
+        "color": {
+            "start": "#ffffff",
+            "end": "#ffffff"
+        },
+        "speed": {
+            "start": 100,
+            "end": 10,
+            "minimumSpeedMultiplier": 1
+        },
+        "acceleration": {
+            "x": 0,
+            "y": 0
+        },
+        "maxSpeed": 0,
+        "startRotation": {
+            "min": 0,
+            "max": 360
+        },
+        "noRotation": false,
+        "rotationSpeed": {
+            "min": 0,
+            "max": 100
+        },
+        "lifetime": {
+            "min": 2.75,
+            "max": 3.25
+        },
+        "blendMode": "normal",
+        "frequency": 0.4,
+        "emitterLifetime": 0.8,
+        "maxParticles": 16,
+        "pos": {
+            "x": 34,
+            "y": 34
+        },
+        "addAtBack": false,
+        "spawnType": "burst",
+        "particlesPerWave": 12,
+        "particleSpacing": 30,
+        "angleStart": 0
+    }
+
+    // Create snipe texture.
+    tagpro.renderer.particleSnipeTexture = base64ToTexture(
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHgAAABxCAQAAAC0Yq+RAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAB3RJTUUH4gYbDBQYq9iDcAAAAAJiS0dEAP+Hj8y/AAASaElEQVR42u2deXRV1dmH35CEQSEQhkCYBCSChFEUgVVRlEGZQQGliFaoVFEqlSqfVgOrWKkusS0ulEJXV5UKogx+CM4gUBBCIIBIGO69uUNCcm9yh8yEBJ7vjzNeCJh7b6Z+y/37J/vuc969n7OHs885794R+Tn8HH4OYYQoaSeJ0kuGVqFekijtJOr/A2YTSZYJ8htZLqtlq2yX3ZIuR69QuuyW7bJVVsty+Y1MkGRp8t9Xm1HSV+bKKvlcjkim+KRCqIYqxCeZckQ+l1UyV/pKVMOv9Wi5QfrLYvlKLJIvF6uFWZUuSr5Y5CtZLP3lBoluqM23o8yQLeKRYrl0bZhGxJjU6HrYl6RYPLJFZkjHhtbMm8sAWSQnpVQqry54LPF0oge9GMBgJvMrHlf1KyYzmAH0ogediCe2KuxKKZWTskgGSPOGAdtY+kmKWK+s1SjiSGI4U3mW1ezkKHYqqaSSSyYpv9g5yk5W8yxTGU4ScURdXdtWSZF+0ri+h6dEmS8HrxyU2jGUObzNN2RTiRYuX0daqCSbb3ibOQyl3dWD2kGZL4n1N5TFyFj5RALmQjVhIM+wnnTKVMhLIUqBLyOd9TzDQJoEQwfkExkrMfWB20FellNy2dxXx7KGVArCRL0au4BU1jA2uG9fllPysnSoa9xBslGKjP4aw0jex0IFcFntmZHrMlCBhfcZSYy5XxfJRhlUl7hj5aAxHsfQh7U4uFiDqMHYF3Gwlj7EmMfugzK2rnruZDlh1G088zlFuT7i1o4uUc4p5hNvrucTMrn2e3NTeUIcRt3exj8ooqKOVMQ/uM1czw55QprWJm6szJFcY5B6mFQq6wy3ggoqSeVh8yCWK3MktvZmypPkjJZVHAtx1DGuguxgIXEG8hmZVFuz7WGSrt2G4kjBTyUX60GV+EkxkC9LugyrDdzu8qU2fYxjKd56wlWQvSw1kC/Jl9K95ger97THvRa8Uq+4GvIrtDAeJ9+r6cHrGfFqI/Nc3FRQXs+qwM1cY8T2yjM123uPaoPEKE5zsd5xyynnIqcZZQxeR2uuJ7eQtzWzt/B5A8FVkD/nFgP5bWlRM8DT5Lw2WK2knAsNSOWsNAav8zKtJnA7yxbFYDSTyW1QuBe4QC6TidaQt0jnSHEbyXQpVsy1ZxdlDVC7aK8BF8t0aRQZcIJ8pr18ex4/Fxoc7gX8PG+8DPxMEiJ7hTNCq99bSWuAuApyGrcadTwikldAN8h72nPv73BTRimllFDaQKSUpAw3vzOek9+TG8IH7ipOxVAnvuEipZRSiIeCBoFbgIdCSinlIt/QSUN2StfwB6y5UqKYeQwnFyilDB/nyKa43nGLyeYcPsoo5QJOHtOAS2RuuANXrHyiNOhmrFabcyl+rFjJq+eGXUIeVqz41XgZq2mmNepPwn1CTpSzylUbyF7KKaGEEgJkYsFOQI3XjwLYsZCpl6KcvQzU6visJIYHPE7ciolHyKYsCNhCLsX1hltMLpYg4DKyeUQDdsu48IBTlFtSI1Iop5hiiikhgEPPrLiepF10BwFK1N/KSdHuxsWSEh7wP5Ue3I51XNQzK8CFBQsWciiqF9wictQSuCjQf73IOu3jTKX8M7xJxx6lifTha8qqAK6vOtbqNxi4jK/pozXqPeFMPjpImnL6XZyihCJVAZxqdlZy9F/rUjlY1RI4Cei/lnCKuzTgtHA+xfTWXrePwkFxFcAW7BTUOW4Bdj1/M3AxDuN1wAnpHTpwLw34QUpNGfrVQcuCBRu+Ogf2YdPzd+A3pZTyoAHcKwLg6ZRTqKoIn96DLNjx6yl1Jb+phjPxUaSnlDO9poAvmDLMNzWo/DrHVUpgdCpzCS7UBnCBesu3kF0PtWvUcrZailwKagxYH7SmUUSBKj9ZOm5BPUpDzjKVo4hpEQ1at2jAI8jQkZUe7MRXr7hKSZxqL9ZwMxhhAN8SOnAbSVVOH84xHTgPCzbyqixCYdDMq4jCsGGqZykPGxa9LEUcY7gGnCptwplr7VVO78e3FBEgoDakbAJBKlCfjq0cYze72MUudnMcC/mUUULhFcdfW4WUUEY+Fo6bLB3Dqj4BF1xxfLbauQIEKOJb+mnAe8ObS29UvhV24d+UECCADzt28oNgS3CyleUsYAr3cZuuUUxmDr9nHan41At2PRXhI5V1/J45TGaUydJ9TGEBy9mKk5Ig6Hzs2PERIEAJ/6aL9j1xY3jAy5T3HS1YSQl+/Hix4sJvUgYrGEsSza92JVM/mnfkDmaxEQ+BoDPNCuBhI7O4g45Ve+MRRXOSGMsKMoLOdGHFix8/JazUPq6VyLLwgJ8Uv5LdYh3YgUfPLJtVDKct0cQQS2OaVKHGxBBNY7rzGIfwVYnr4xCP0Z3GRBNzTTuxxBBNW4azimz9XA8OHXixdnn88mR4wHdKtmLiIWwUqMhG3T5NR5rRjBuqoabEMYpDVdRygEOMIo6m1bLTjGZ05GlTPSslKsDGQxpwttwZHnC85uAwlP0UmgpZwGlm0YbmIakFD5F5BXIABw/RIkRLbZjFabUKFBWyn6GGE0R8uC/xdijf/BPYQDE+VX6yeI72tKRVSIrjZtZRqNvx4aOQ9+lFXIiWWtKe58jCr9spZgMJmj/AjnBf4kXLMrmgXLXXCejGA6wliXjahKjWxPOC6cIpBX2BeFqHbCueJNYGlel1rX4vyLJwnVwayRTNvfAxLOr1DHCcqbQigXYhKoGWLLwKeCEtw7LViqkcV5H9WIz30kUyJfwPal0lRzEzhAME8OKlkA/pSXs6hKHW/JYivCYV8Vtah2WrPT35kEK8eAlwgCEacE74Xx5EmsunSi9uwTYK8OLDxUu0p1NYaseiq4AX0S5Ma+15CRc+vBSwTbsHX5JPI/GcbyyLNefvP3IeLz5OMItO3BSGutKFlygk36RCXqILXcOy14lZnMCHl/P80XAiXxyJ13yUjJBSxdRUMvDiZy93040eYag7fVlFQRBwAavoS/ew7HXjHvbix0sGUzXgssg+l4p00fx3OrMfH36+4xfcTFIYuplhbMAfBOxnA8PCtjec3fjxsZ/OGnBGJD1YRKSVrNFmsx/iwc9O+tGL3mEoiQfYh5c8k7zs4wGSwrLXi1v5DD8ePjRm8mukVaTe0U9owC/iws8O+tInLPVmLk7yg4DzcTKX3mFavJXt+HHxogH8ROQe1MOVZRxRjMOCn92MpB/9Q1Y/bmcFviDcPPLwsYLbw7R4F7vwY2GcBhyQ4ZG7LfWWw8rV608GPvYzmQEMClkDGcVn5OPBg4c88tS/8vmMUQwMw+IAJnMAHxn01+r3cDjvsq4etj5VzLXmBF6OMY9B3B6G5uJQIQ8xhSkcUmMO5oZlbxDzOIaXE7TWgD+VLpEDd5LNirnmHCcfF28wmDtD1BDuZp0K6GY2jWnMbNzqL+u4myEh2xzMa9jJ57jhVfuJdKoJP+mvFXM9OIkHL5u5j6EMC1GzOY0bNx4OMpAYYhjIQTy4cXOa2SHbG8p9bMaLhx9J1oC3R3pTEhEZIDbtde1pPORxjAUM464Q9AvuZxM5uHHjZSWdaEYzOrESL27c5LCJ+/lFSDaHsYBj5OHhtPF61iYDamKNUoUySs/DptbRBsYzgnuqqbsZzRs4cKuaSwviiKMFc/XfHLzBaO6uts0RjGeD2j5szNNG6YrI1zI1lgXaffjPuMglFzc2VjGOkdxbDd3DRN7kLG5yycXDEcYQR2taE8cYjuBRbZ7lTSZyT7VsjmQcq7CpNl382bgPL4h0/WkLeUsD3qZmkIsbC+8wgdGMua5GM5rHWY9VPzOfjQykLQkk0JaBbCRft2llPY8zuhpWJ/AOFlNpthnAb0XqM91WG6O7sh8POarcWPiAXzKOB66pcczmHQ7gwq2elYubV0k06VXc5Oo2XRzgHWb/hNVf8gEW3WYOHvbTVQPeLG0jA+4oBzRPj+9NmeSQi5NU/spspjCJiUxgPBOZyCSmMI1ZvMpHpGM3ASlFm0QiXVQlMinoMubixk46H/Eqs5imWp7IeCaolmfzV1Jxmmzm4OZ7w7vjgHSM9C6cqnnTBgMrBXTwA9tYSQrPMI8XeYU3WM9XnMRGFrlBBcvlPH8hiW50V9WNJP7C+SuOyiULGyf5ivW8wSu8yDyeIYWVbOMHHEFHa8C3Gl+VOkUKfLjqGjaUjQsXThw4ceIii/NVHpfDN0ykBz1N6sFEvrnG0efJwoVTtezCRXaVxwXV8OFIgTto046e7CeX82Erh3R+zS1XPeTdwq9JJycCy7nsp6cG/HWkS6lbymptYvlVRMAneZkBJFehAbzMyYiAv6K5BrxaWkYGfIP8QbstvYuL82SHKOUMF39iMAOuocH8CZfp6NDsu3jXuC39IRL3cOWt1oMa8DzOhVycLJxkkc1OxjD4OhrDTtPRoemcMdNCHox8D4g7tHfTfTgWYg04+ZF0bGTzEsMYch0N4yWysZHOjzhDrOFjxpCVI3fUxLqlrYq5pryJk6xqK5NjHCINK1k8ylCGX0dDeZQsrKRxiGNkhpCLkzdpqgFvi3zdkkgjYzbdn3Syq1kQG0c5yEGOkomLp37y6ecpXGTq59iqmUs26fQ3GvTimlktPkTz52nK02RUC1nD1YBXMiboYeOeoMeEkYxhpQm4usjZZPC0Ub8nZEjNrD1sIsu1leEtWUIG53FdVwbuQdKw4uI7ZjGK0apGMZWpQfFZfIcLK2n6eUex/UQu58lgCS2NleLLa25PpkHajFpozSKOk3PNYmRhI10v9kEOcYYsnLzPTMZwP/dzPzP5F/9iphobw0zex0kWZzhkOjMdG1nXzCeH4ywy3mYhB2p2K5MZ2gomIY7pbMehTvuC5SKT46ZCH+R7fsCBCxtbeYEpPMBE/oYNG39jIg8whRfYig0XDn7g+6Bzj5N5jVwcbGe6eesDp8yo6SXxT4nH8M3pyWLS1NmzWQ5+1GvpEIc5xEFOYMeJCyfp7OQDPuYHnDj5gY/5gJ2kq6l2TpjOUiz8WGUeaSymp9nfxyNP1fx+HjfKU5JnOBI1ZxCvcRRrUGFspJPGcTI4hxUbVqxk6qlZuMjU24YLB5m4yNLTM7GqZ50jg+OkkY4tyL6Vo7zGIGMqiSB58pTcKLUQmslsOWvsnRXFjSTzIvuw6A3PgR079irqJVRdacmFhX28SDI3mn3CKuSszJZmUkshRobIVikwO4xF05NX2Y8DJ45akhMH+3mVnkQHO8AVyFYZUtv78bSTxZKqfTXW+vS9bMZea8B2NnPvlT56pZIqi6Wd1ElIltflcPA2joPZXUvIdnYz+MptIA/L65IsdRhiZLA8L3uMHh3LEixqv7Or47I9KG6/joJTXUFxC0vMtVshe+R5GVwf28Q1kmRZIAeU9WtR3M5pvZCZ7GQdNj1uZQtWE8QZzphiwak21rKFTD1+mtu1nlspB2SBJEe6zj+ymh4uu5Rrn8B/yFRlZSmPcE6PH2EEO0ypK1iBVY/vYARH9Ng5HuYVU+p/NB87ZJcMr58NAIOdIv6uFCeezaZCP8RUE/AWbuYjU+o0pplSP+JmtphSpzLdlLqZeA3475E6NNRMWKYBb8KmF3oiC7GoMRsf0D0odRKTdCQbm+jOB3qqhYVMDErVgZdJgwhLNOCN2FSdZSAvcE6NWVlKZz4ypU5iEmf1+Ed0ZilWNXaOFxhoSt1oAC9pUMBxrNYLeZSkiICTOKqnrjYeEhoI8LPK03Isj3BGnRJupitLTMDPkcgmE/BkppiAN5HIcybgJXRlszqxPMMj2k3psjzbMICnaZ7z8cxnPd/yNU8Sx0ysZGIjExvjieddrKrOMJTBnNHj7xLPePXITKzMJI4n+ZpvWc98o0Fn18zmQpGHm+QLY2/abvSjL/FE0YY5rGUHW1lKIrHMIE1dQPclHWnP/6qxNGYQSyJL2coO1jKHNkQRT1/60c28N+0XcpM0kDBHsqpe05JAVzrTkiiEG0lmLNMZyk3EEE0XhjKdsSRzI0IULelMVxKusa5FsmSONJgQK89pzfr6ahS0x2zUT+0hbihH/qf29q8MD/lR2Su51dz+PhRViFvSZE59b6Vd1UeZjvKwrJUvZJ/skZ2yV1zaiglBys0bM1ehy1IuxqoFl+yVnbJH9skXslYelo4N+f8BxEqiJEi0dJAHJUXekw2ySdZIirwlO/X/7bBPNsgG2afHd8pbkiJrZJN8LGslRR6UDhItCZLYsJpx9UJzaSmNRKSRdJE71f/dkSzNpbkkq7E7pYt6REtpVZ9PQj+Hn8N/Yfg/cC9lWZ7Qyo4AAAAldEVYdGRhdGU6Y3JlYXRlADIwMTgtMDYtMjdUMTI6MjA6MTQrMDA6MDDq+dMfAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDE4LTA2LTI3VDEyOjIwOjE0KzAwOjAwm6RrowAAAABJRU5ErkJggg=='
+    )
+
+    // Create snipe audio
+        var snipesound = new Audio("https://raw.githubusercontent.com/hjalpa/sounds/main/zoomsnipe2.mp3");
+            snipesound.volume = 0.7;
+    //  var snipesound = new Audio("https://raw.githubusercontent.com/hjalpa/sounds/main/snipesound.mp3");
+    //  var snipesound = new Audio("https://raw.githubusercontent.com/hjalpa/sounds/main/fortnitesnipe.mp3");
+
+    // Create snipe with snipes flying around.
+    tagpro.renderer.createSnipe = function(x,y) {
+        if (tagpro.renderer.options.disableParticles) return
+        const snipeEmitter = tagpro.renderer.makeParticleEmitter(
+            tagpro.renderer.layers.foreground,
+            [tagpro.renderer.particleSnipeTexture],
+            tagpro.particleDefinitions.snipe
+        )
+        snipeEmitter.updateSpawnPos(x,y)
+        tagpro.renderer.emitters.push(snipeEmitter)
+        document.getElementById("pop").pause();
+        document.getElementById("pop").currentTime = 0;
+        document.getElementById("friendlydrop").pause();
+        document.getElementById("friendlydrop").currentTime = 0;
+        document.getElementById("drop").pause();
+        document.getElementById("drop").currentTime = 0;
+        snipesound.play();
+    }
+
+    //Get player stats for sniping info
+    //loop for 8 players
+    let snipePlayers = []
+
+    // Update latest flag carriers with new info
+    tagpro.socket.on('p', function(event) {
+        //Is this player boosting?
+        //console.log(JSON.stringify(event));
+        for (const player of (event.u || event)) {
+            if (!snipePlayers[player.id]) {
+                snipePlayers[player.id] = {
+                    boosting: false,
+                    preBoostTags: 0
+                };
+            }
+            if (snipePlayers[player.id].boosting == true && player['s-tags']) {
+                console.log("COMA: " + "Player " + player.id + " SNIPED");
+                tagpro.renderer.createSnipe(tagpro.players[player.id].x,tagpro.players[player.id].y);
+            }
+            if (player.lx !== undefined && player.ly !== undefined) {
+                let plLt = Math.abs(player.lx) + Math.abs(player.ly);
+                // Perform further calculations or actions with plLt
+                if (plLt > 9 && snipePlayers[player.id].boosting == false){ //7
+                    snipePlayers[player.id].boosting = true;
+                    //snipePlayers[player.id].preBoostTags = tagpro.players[player.id]['s-tags'];
+                    //console.log("COMA: " + "Player " + player.id + " is boosting Pre: ");
+                }
+                if (plLt < 6 && snipePlayers[player.id].boosting == true){ //4
+                    snipePlayers[player.id].boosting = false;
+                    //console.log("COMA: " + "Player " + player.id + " boosting over Pre/Past: " + snipePlayers[player.id].preBoostTags + "/" + tagpro.players[player.id]['s-tags']);
+                }
+            }
+        }
     })
 }
 
@@ -347,7 +474,7 @@ const initBalloon = () => {
         "spawnType": "point"
     }
 
-    // Flaccid Splat particle definition
+       // Flaccid Splat particle definition
     tagpro.particleDefinitions['fSplat'] = {
 	"alpha": {
 		"start": 0.8,
@@ -471,18 +598,19 @@ const initBalloon = () => {
         'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQIAAAAzCAYAAAB8HgbsAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAVeSURBVHhe7Z3Ji1xVGEe7Y+KUOGCMSTTOQpwCAUWycBExSMCIUeOARET/AA2IE1m5yEIQRGhwI7hQN4IgCBpBcGE27oTgzqCJxszGGGMcou05vvc2bVV3DV1d71X/DhzuvdWVSmX4vvruffe+GgshNJPJyclzy24IYT5h8OMGfAeP4JLyRyGEUYeAvxF34Bncjdvw0vLHIYRRxUDHV3EfnsCvcY+PlU8JIYwiBPlC3ISf4in8Eaeyr3x6CGGUILjX4rvoJ39VAbTDn91Q/tIQQpMhmFfg67gfj+Nh7IQD+Fb5MiGEpkEAu+q/Hb/BdqV/JxwvXzKE0BQI3HX4Pp7Eg9gvVhEbypcPIdQVAnUVTuAh9Jq/zhbH8MPyt+qb8bINIcwCBKe7/V7GJ3A5nsCVOAh+w+Xj4+O/FsMQwlAhAaz3Exr7mfd3i7/PK+Vb6ItUBCH0CEHoJbwX8EH8C8/GS3Au+ZaK4Lqy3zNJBCF0AcHv3v7t+Dga9JblK3BYOD1YTTL4oRiGEAYCwe9uv434EZ7GuSr9O8H3MlG+1Z5JRRBCGwiwW2mew814Ci/AC7FuHKYicGGyZxaUbQgBCH4P+ryGltpf4Ea8GK/AOiYBWcD7XVf2eyKJIMx7CCJL/834GcO96PzfwDcBDHP+3ymT+GzR7Y1MDcK8hcC/nWYb3o8/oYt/Tb3Rh4uWy5gi/F4MuyMVQZhXEPwe9HkDDzDcifegwX9V2TaVY+g0pidSEYSRh6B3t5/X+59ES/2f8XIcJawIvqQi6On8QRJBGFlIAHfSPIP34i/YhPl+PzgtuJJkcLQYdk6mBmGkIPg96PMmHmH4Ad6F5+OoJwHxaPJLRbc7UhGExkPQO7c3ALbiMhzkQZ+6s5+KYFXZ75hUBKGxkAC8rbdHcQ/h03g1+uk/X5OALObvxI1QXZGKIDQK/pN70MdP/4fQffYGvtf7Q8FB3ElV8FQx7IwkglB7CH4D3TP+j2EdDvrUHa+KuKfgTDGcmUwNQi0h+Kvben/McD96o4/qWn+SwPRYKa0vup2RiiDUCgLf+e3z6EEfF/0uwrru8a8rVgS7qAjuK4Yzk0QQhg7B71d3ecb/EXTO/ydehqF33FPg9KCj25hlahCGAsHvbb23oAd9vsdH0d1+rgckCfRPV3sKUhGEOYXA96CPZ/w3ofvjl2KT9/jXmb1UBNeU/WlJIggDh+B3g4ufTg/jWfgPuvEnDBanBWtIBt8Vw/ZkahAGQln6b8VPGO7Gu9GS3wogSWBuOIkvFt3pSUUQZh2CfyGN8/6v8D18G93o4uN/oIuBf6OVgckh3/M/OI5SEcyYeJMIwkAgGSypVqzLxOD0wLUAg17t+9j16G22fM4iPA+dPlg5eItwTw2aPOzbmjzUe/T5nDA9nkR8gH+LXcWwNUkEobaQQLyPgJuHvJJQ3TbMx1wAuxbvQJOHSWRx2fo8L515s1Fbd9fZejsvE4ivMdffPTBMTASfkwi8NNuWJIIwcliN0EytPEwgtp5VuA39MhIrD39uMnHTkjvyTpetScO+CUSrS5tNxD/PUpKBCbElSQQhlJBAWlUeVVWyGtfiOWgCsQKxbyJxCuS0xSrEtQ/7VQIx+Qx7Z6TrMxMkgh3F8P8kEYTQJySQVpVHVZXcjGvQtQ+v0rlz0r6t6x+ufZhITCAuolqJyGwnkD0kAquhliQRhDAkSCCtKo+qKjF53II+7tqHrVWIrWcJXPuwArE1mVQJpN1NWE02K0kG/y3gTiWJIISGQQJpVXlUVYnTl5vQaYtrH7ZWFotIAon3EEIIIYQQQgghhBBCCCGEEEIIIYQQwkyMjf0LURcYPGYdEs4AAAAASUVORK5CYII=',
     ].map(base64ToTexture)
 
+
     // Create emitter
     tagpro.renderer.startDeathEmitter = function(startColor, endColor, x, y) {
         if (tagpro.renderer.options.disableParticles) return
 
         // Balloon splat
-        const balloonSplatEmitter = new PIXI.particles.Emitter(
+        const balloonSplatEmitter =tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.foreground,
             [tagpro.renderer.balloonSplatTexture],
             {...tagpro.particleDefinitions.balloonSplat, "color": {"start": startColor, "end": startColor}} // I don't like the default end color
         )
         balloonSplatEmitter.updateSpawnPos(x,y)
-        const balloonSplatEmitterInside = new PIXI.particles.Emitter(
+        const balloonSplatEmitterInside = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.foreground,
             [tagpro.renderer.balloonSplatTexture],
             {...tagpro.particleDefinitions.balloonSplat, "scale": {"start": 0.14, "end": 0.001, "minimumScaleMultiplier": 1},"color": {"start": startColor, "end": startColor}} // I don't like the default end color
@@ -490,13 +618,13 @@ const initBalloon = () => {
         balloonSplatEmitterInside.updateSpawnPos(x,y)
 
         // Flaccid splat
-        const fSplatEmitter = new PIXI.particles.Emitter(
+        const fSplatEmitter = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.foreground,
             [tagpro.renderer.fSplatTexture],
             {...tagpro.particleDefinitions.fSplat, "color": {"start": startColor, "end": startColor}} // I don't like the default end color
         )
         fSplatEmitter.updateSpawnPos(x,y)
-        const fSplatEmitterInside = new PIXI.particles.Emitter(
+        const fSplatEmitterInside = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.foreground,
             [tagpro.renderer.fSplatTexture],
             {...tagpro.particleDefinitions.fSplat, "scale": {"start": 0.4, "end": 0.001, "minimumScaleMultiplier": 1},"color": {"start": startColor, "end": startColor}} // I don't like the default end color
@@ -504,7 +632,7 @@ const initBalloon = () => {
         fSplatEmitterInside.updateSpawnPos(x,y)
 
         // Shards
-        const shardsEmitter = new PIXI.particles.Emitter(
+        const shardsEmitter = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.midground,
             tagpro.renderer.shardsTextures,
             {...tagpro.particleDefinitions.shards, "color": {"start": startColor, "end": startColor}} // I don't like the default end color
@@ -512,15 +640,15 @@ const initBalloon = () => {
         shardsEmitter.updateSpawnPos(x,y)
 
         // Add Circle emitter
-        const growingCircleEmitter = new PIXI.particles.Emitter(
+        const growingCircleEmitter = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.midground,
             [tagpro.renderer.particleCircleTexture],
             { ...tagpro.particleDefinitions.circle, "scale": {"start": 0.2, "end": 1}, "lifetime": {"min": 0.2,"max": 0.3}}
         )
         growingCircleEmitter.updateSpawnPos(x,y)
 
+
         // Push emitters
-        // if holdtime is <= 1.2, push fSplat instead
         tagpro.renderer.emitters.push(shardsEmitter, balloonSplatEmitter, balloonSplatEmitterInside, growingCircleEmitter)
     }
 
@@ -636,7 +764,7 @@ const initCapConfetti = () => {
         tagpro.socket.on("p", (e) => {
             const playerUpdates = e.u || e;
             playerUpdates.forEach((update) => {
-                if (!update['s-captures']) return 
+                if (!update['s-captures']) return
 
                 // Create confetti
                 if (tagpro.players[update.id].team == 1) {
@@ -652,6 +780,7 @@ const initCapConfetti = () => {
     tagpro.renderer.particlePlusTexture = base64ToTexture('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEEAAAA+CAYAAAB0g3ZRAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAMNSURBVHhe7ZrPq01RHMXv8Zt4FIpEkQFRSiYmYmJCyogMRDExoWQif4KRMpHZMzKQhDLzKxm9gQFl8hCP/Mrv58fjWOvsda9zr+vds3G+97TP/tR6a+/XPbe9191nn733vY1IJCORm5Km6WLYOmgV9A4agm4nSTIGDx8EcAwagzp5DO3Vy8IFnTyedXd8Turl4YHO7XR9LMQOXRYW6NhF179C3NNlJphMjOjUEthDVyvMACbK9yqXygR52WyQ+7BWXjpWISyX+/BGXjpWIcyW+/BaXjpWIcyS+2AyH5Aqh8CVpAlWIcyUF2UET4YfKpeOVQgz5EUZkZtQ1RC+yk2wCmG6vCimu1urEHy3yJPlJliF4DvJTZKbYBWC7/COIYAgQ/AlyDkhjgRQ6RD+2/M4TVM2fG5OcyAukrhGOAStgYrCR+ot6AX0EnoLfYSai6ipEJfiA9ACqbkgG4U+QNx7PIW4+ryKZfgNeFe6hoAOrYftgniwMR+aCOVhndvj/Mao8zVVg2Gchk4hkCfZf8RvISCAc7DtrhYkz6A9COKKq3aEUIMAmnyHNiKIm6y0QkAAK2F3Xa0WXEIIW1nIPx02y+vCFnzwU1jIh8Bj8bqxgn/yIdTjy9B2ssObfAjX5HVhGHMC1yBtIVyX14Wz8l8hIBWusg66WvAMQ0ddsX0kMIgTsH2uFiyvoMPoa+ug50/L5kWw3VI2g/YR3rdfXLHFN+gzxH0ClS9Pg5ZCXPfkP2S+B+e9/QjgUfYf0TWEPAhkE4wbonlyihsXkkK8jbi5+SSxIXR+l8iND3UGWg0VBg3t2bbxQLsZANvMzRXf7w69b6BBQ5AXutSEtjmhRDg6KotVCLxnK0sMAVQ1BG51zajqnBBkCL4jwexreWIVQudipxdBjgRfghwJvsSRAGIIIN4OII4EEEOwxioEHoL4EOSv13im58MDuQkxBGAVAs/2fH61flkeFmmaHnAHZz05r0vCBB08Ao1mXe3OIMSTblP+6UT3b0AnF8K2Qcuk5xDnjPtJklyARyJ9odH4CcrYuVhCO20tAAAAAElFTkSuQmCC')
     tagpro.renderer.particleMinusTexture = base64ToTexture('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEEAAAA+CAYAAAB0g3ZRAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAFoSURBVHhe7dc9SsRAGMbxRPzC9QRiIyqyl7C2t/YYFjbewHNo4QVst7AQ3U5BEKxFQVRQUTQ+r3kHgmCSCYvuwP8HD0+yLjIzjrPZDAAAAAAAAAAAAKOTe4+FoihmVfOeGc905dp+HjKpBA/KtSXP86fvVyJ0WgQNdkG14rFBBlNKdaBh8NVJ2AR73iHhvjqxrvaVPS3GWXk7Ypp8XzlQUtD3YTdqvRP0S5dUl4r9tVNwpN2w4de1YhbhULVZ3iWjp4V49utfTXi30WpVx8yad61Wi6BdsKiywys1c9612u4EO9VTdOFdq9Ui6P/qSvVZ3iXjWOO+9+taMWfC0DsVO96NYhZh23vcnSrr2gWD8rZZ1BOjDsgt1a5iT4r/pVDuPLfKjedcGWryJ+ooXR+b7XlhVVlWbDe9e94q1zbYnz4Ue094n7W9VmVnj30XePS22Gf9i/KqSUZ/NwAAAAAAAAAAAPgbWfYFLQPz+/RAIkQAAAAASUVORK5CYII=')
     tagpro.renderer.particleCircleTexture = base64ToTexture('data:image/png;base64,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')
+
 
     // Create confetti
     tagpro.renderer.createConfetti = function(x,y) {
@@ -670,21 +799,21 @@ const initCapConfetti = () => {
         // Add confetti pieces with different colours
         const plusColor = getRandomColor()
 
-        const confettiPlusEmitter = new PIXI.particles.Emitter(
+        const confettiPlusEmitter = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.midground,
             [tagpro.renderer.particlePlusTexture],
             { ...tagpro.particleDefinitions.confetti, color: plusColor}
         )
         confettiPlusEmitter.updateSpawnPos(x,y)
         const heartColor = getRandomColor()
-        const confettiHeartEmitter = new PIXI.particles.Emitter(
+        const confettiHeartEmitter = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.midground,
             [tagpro.renderer.particleHeartTexture],
             { ...tagpro.particleDefinitions.confetti, color: heartColor}
         )
         confettiHeartEmitter.updateSpawnPos(x,y)
         const minusColor = getRandomColor()
-        const confettiMinusEmitter = new PIXI.particles.Emitter(
+        const confettiMinusEmitter = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.midground,
             [tagpro.renderer.particleMinusTexture],
             { ...tagpro.particleDefinitions.confetti, color: minusColor}
@@ -692,7 +821,7 @@ const initCapConfetti = () => {
         confettiMinusEmitter.updateSpawnPos(x,y)
 
         // Add Circle emitter
-        const growingCircleEmitter = new PIXI.particles.Emitter(
+        const growingCircleEmitter = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.midground,
             [tagpro.renderer.particleCircleTexture],
             { ...tagpro.particleDefinitions.circle, "scale": {"start": 0.2, "end": 1}, "lifetime": {"min": 0.2,"max": 0.3}}
@@ -712,7 +841,7 @@ const initAgressiveRb = () => {
         trCreateExplosion(x,y)
         if (tagpro.renderer.options.disableParticles) return
 
-        const rbCircleEmitter = new PIXI.particles.Emitter(
+        const rbCircleEmitter = tagpro.renderer.makeParticleEmitter(
             tagpro.renderer.layers.foreground,
             [tagpro.renderer.particleCircleTexture],
             tagpro.particleDefinitions.circle
@@ -745,7 +874,7 @@ const initGrabAnimation = () => {
         // Only ctf for now
         if (flagCoords.yellow) {
             // console.log('yellow flag, return')
-            return 
+            return
         }
 
         let lastTileGone = {
@@ -762,8 +891,8 @@ const initGrabAnimation = () => {
         }
 
         // Add grab animations layer
-        //tagpro.renderer.layers.grabAnimations = new PIXI.particles.ParticleContainer
-        tagpro.renderer.layers.grabAnimations = new PIXI.ParticleContainer
+       // tagpro.renderer.layers.grabAnimations = new PIXI.particles.ParticleContainer
+        tagpro.renderer.layers.grabAnimations = new new PIXI.Container()
         tagpro.renderer.layers.foreground.addChild(tagpro.renderer.layers.grabAnimations)
 
         // Add a new grab animation
@@ -785,7 +914,7 @@ const initGrabAnimation = () => {
             tagpro.renderer.layers.grabAnimations.children.forEach((ga) => {
                 // Get time left
                 const t = ga.endTime - performance.now()
-            
+
                 // Remove grab animation if time is over
                 if (t <= 0) {
                     tagpro.renderer.layers.grabAnimations.removeChild(ga)
@@ -794,13 +923,13 @@ const initGrabAnimation = () => {
 
                 const player = tagpro.players[ga.playerId]
 
-                // Remove flag 
+                // Remove flag
                 player.sprites.flagLayer.removeChild(player.sprites.flag),
                 player.sprites.flag = null
 
                 // Destination coords
-                const x1 = player.x + 20
-                const y1 = player.y - 20
+                const x1 = player.x + 13
+                const y1 = player.y - 32
 
                 // Get ms of frame
                 const frameTime = performance.now() - tagpro.renderer.lastFrameTime
@@ -810,8 +939,8 @@ const initGrabAnimation = () => {
                 ga.ay = (2 * (y1 - ga.y)) / Math.sqrt(t)
 
                 // Get new position
-                ga.x = ga.x + 0.5 * ga.ax * Math.sqrt(frameTime) 
-                ga.y = ga.y + 0.5 * ga.ay * Math.sqrt(frameTime) 
+                ga.x = ga.x + 0.5 * ga.ax * Math.sqrt(frameTime)
+                ga.y = ga.y + 0.5 * ga.ay * Math.sqrt(frameTime)
             })
         }
 
@@ -830,7 +959,7 @@ const initGrabAnimation = () => {
         //         let texture = tagpro.tiles.getTexture(flag.tile)
 
         //         tagpro.renderer.addGrabAnimation(texture, flag.x, flag.y, tagpro.playerId,  performance.now() + 250)
-                
+
         //     }
         // })
 
@@ -838,7 +967,7 @@ const initGrabAnimation = () => {
         tagpro.socket.on("p", (e) => {
             const playerUpdates = e.u || e;
             playerUpdates.forEach((update) => {
-                // No flag update or flag dropped 
+                // No flag update or flag dropped
                 if (!update.flag) return
 
                 let flag = {}
@@ -857,7 +986,6 @@ const initGrabAnimation = () => {
         })
     })
 }
-
 
 // Helper function to create pixi texture out of base644 encoded pngs
 const base64ToTexture = (base64) => {
@@ -878,18 +1006,18 @@ let flagCoords = tagproReady
                 let red = null
                 let blue = null
                 let yellow = null
-            
+
                 for (const [x, mapTiles] of map.tiles.entries()) {
                     for (const [y, tileId] of mapTiles.entries()) {
                         if (tileId == 3 || tileId == "3.1") red = {x: x, y: y}
                         if (tileId == 4 || tileId == "4.1") blue = {x: x, y: y}
                         if (tileId == 16 || tileId == "16.1") yellow = {x: x, y: y}
-            
+
                         if (yellow || red && blue) break
                     }
                     if (yellow || red && blue) break
                 }
-            
+
                 resolve({'red': red, 'blue': blue, 'yellow': yellow})
             })
         })
@@ -908,20 +1036,40 @@ tagpro.ready(function() {
         balloon: initBalloon,
         capConfetti: initCapConfetti,
         agressiveRb: initAgressiveRb,
-        grabAnimation: initGrabAnimation
+        grabAnimation: initGrabAnimation,
+        snipe: initSnipe
     }
 
     for (const effect in allEffects) {
         if (settings.get(effect)) allEffects[effect]()
     }
+
+
+    tagpro.socket.on('disconnect', function(data) {
+       // data has 'id' property of disconnecting player
+       const playerId = data.id;
+
+       if (playerEmitters[playerId]) {
+           const emitter = playerEmitters[playerId];
+
+           // Stop the emitter
+           emitter.emit = false;
+
+            //Remove it from the active list
+            const index = tagpro.renderer.emitters.indexOf(emitter)
+            if (index > -1) {
+             tagpro.renderer.emitters.splice(index,1);
+           }
+            //Remove the tracked key/value
+            delete playerEmitters[playerId];
+        }
+   });
 });
 
 //To-do
 // Add Color Code with Line 66
 // Why are red balloon pops blue?
-// Turn off particles on player disconnect
 // Turn off particles on teleport
-// Check random kiss code again (compare to other working random codes)
 // Add Bonk Code
 // Add Wall Code
 // Zorro?
